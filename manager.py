@@ -1,18 +1,18 @@
 ## -*- coding: UTF8 -*-
 ## manager.py
 ##
-## Copyright (c) 2018 analyzeDFIR
-## 
+## Copyright (c) 2019 analyzeDFIR
+##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to deal
 ## in the Software without restriction, including without limitation the rights
 ## to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 ## copies of the Software, and to permit persons to whom the Software is
 ## furnished to do so, subject to the following conditions:
-## 
+##
 ## The above copyright notice and this permission notice shall be included in all
 ## copies or substantial portions of the Software.
-## 
+##
 ## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 ## IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 ## FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -21,155 +21,152 @@
 ## OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 
-import logging
-Logger = logging.getLogger(__name__)
-import os.path
-from sqlalchemy import create_engine, MetaData
-from sqlalchemy.engine import Engine
-from sqlalchemy.orm import sessionmaker, scoped_session, Session
+#pylint: disable=R0902
+from typing import Optional, Any, Callable, Union
 
-class DBManager(object):
-    '''
-    Class for managing state of database connection
-    '''
-    def __init__(self, conn_string=None, metadata=None, session_factory=None, session=None, scoped=False):
+from sqlalchemy import create_engine as sqlalchemy_create_engine, MetaData
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import sessionmaker, scoped_session, Session, Query
+
+
+class DBManager:
+    """Database connection manager.  Handles database connection configuration
+    for both standard applications and web servers (using thread-local storage),
+    reading from and writing to a database (including transactions), etc.  This
+    class essentially acts as a convenience wrapper around a SQLAlchemy Engine
+    and Session.
+    """
+
+    def __init__(self,
+        conn_string: Optional[str] = None,
+        metadata: Optional[MetaData] = None,
+        session_factory: Optional[Callable[..., Session]] = None,
+        session: Optional[Union[session, scoped_session]] = None,
+        scoped: bool = False
+    ) -> None:
         self.conn_string = conn_string
         self.metadata = metadata
         self.session_factory = session_factory
         self.session = session
         self.scoped_sessions = scoped
         self.engine = None
+
     @property
-    def conn_string(self):
-        '''
-        Getter for conn_string
-        '''
+    def conn_string(self) -> Optional[str]:
+        """Getter for conn_string."""
         return self.__conn_string
+
     @conn_string.setter
-    def conn_string(self, value):
-        '''
-        Setter for conn_string
-        '''
-        assert value is None or isinstance(value, str)
+    def conn_string(self, value: Optional[str]) -> None:
+        """Setter for conn_string."""
         self.__conn_string = value
+
     @property
-    def engine(self):
-        '''
-        Getter for engine
-        '''
+    def engine(self) -> Optional[Engine]:
+        """Getter for engine."""
         return self.__engine
+
     @engine.setter
-    def engine(self, value):
-        '''
-        Setter for engine
-        '''
-        assert value is None or isinstance(value, Engine)
+    def engine(self, value: Optional[Engine]) -> None:
+        """Setter for engine."""
         self.__engine = value
+
     @property
-    def metadata(self):
-        '''
-        Getter for metadata
-        '''
+    def metadata(self) -> Optional[MetaData]:
+        """Getter for metadata."""
         return self.__metadata
+
     @metadata.setter
-    def metadata(self, value):
-        '''
-        Setter for metadata
-        '''
-        assert value is None or isinstance(value, MetaData)
+    def metadata(self, value: Optional[MetaData]) -> None:
+        """Setter for metadata."""
         self.__metadata = value
+
     @property
-    def session_factory(self):
-        '''
-        Getter for session_factory
-        '''
+    def session_factory(self) -> Optional[Callable[..., Session]]:
+        """Getter for session_factory."""
         return self.__session_factory
+
     @session_factory.setter
-    def session_factory(self, value):
-        '''
-        Setter for session_factory
-        '''
-        assert value is None or callable(value)
+    def session_factory(self, value: Optional[Callable[..., Session]]) -> None:
+        """Setter for session_factory."""
         self.__session_factory = value
+
     @property
-    def scoped_sessions(self):
-        '''
-        Getter for scoped_sessions
-        '''
+    def scoped_sessions(self) -> bool:
+        """Getter for scoped_sessions."""
         return self.__scoped_sessions
+
     @scoped_sessions.setter
-    def scoped_sessions(self, value):
-        '''
-        Setter for scoped_sessions
-        '''
-        assert value is None or isinstance(value, bool)
+    def scoped_sessions(self, value: bool) -> bool:
+        """Setter for scoped_sessions."""
         self.__scoped_sessions = value
+
     @property
-    def session(self):
-        '''
-        Getter for session
-        '''
+    def session(self) -> Optional[Union[Session, scoped_session]]:
+        """Getter for session."""
         return self.__session
+
     @session.setter
-    def session(self, value):
-        '''
-        Setter for session
-        '''
-        assert value is None or isinstance(value, (type(None), Session))
+    def session(self, value: Optional[Union[Session, scoped_session]]) -> None:
+        """Setter for session."""
         self.__session = value
-    def create_engine(self, conn_string=None, persist=True):
-        '''
+
+    def create_engine(self,
+        conn_string: Optional[str] = None,
+        persist: bool = True
+    ) -> Optional[Engine]:
+        """
         Args:
-            conn_string: String     => database connection string
-            persist: True           => whether to persist the database engine
+            conn_string => database connection string
+            persist     => whether to persist the database engine to self.engine
         Returns:
-            Engine
-            New database engine using either provided conn_string
-            or self.conn_string
+            New database connection (SQLAlchemy Engine) using either provided conn_string
+            or self.conn_string.
+            NOTE:
+                If both conn_string and self.conn_string are None then will return None.
         Preconditions:
-            conn_string is of type String
-            persist is of type Boolean
-        '''
-        assert isinstance(conn_string, (type(None), str))
-        assert isinstance(persist, bool)
+            N/A
+        """
         if conn_string is not None:
             self.conn_string = conn_string
         if self.conn_string is not None:
-            engine = create_engine(self.conn_string)
+            engine = sqlalchemy_create_engine(self.conn_string)
             if persist:
                 self.engine = engine
             return engine
-    def create_session(self, persist=True):
-        '''
+        return None
+
+    def create_session(self, persist: bool = True) -> Union[Session, scoped_session]:
+        """
         Args:
-            persist: Boolean    => whether to persist the session
+            persist => whether to persist the session
         Returns:
-            Session
-            Either new session object or pre-existing session
+            Either new session object or pre-existing session.
             NOTE:
-                If _session_factory is None, this will throw an error
+                If self.session_factory is None, this will throw an AttributeError.
         Preconditions:
-            persist is of type Boolean
-        '''
-        assert isinstance(persist, bool), 'Persist is not of type Boolean'
+            N/A
+        """
         if self.scoped_sessions:
             return self.session_factory
         if persist:
             if self.session is None:
-                self.session = self.session_factory()
+                self.session = (self.session_factory)()
             return self.session
-        return self.session_factory()
-    def close_session(self, session=None):
-        '''
+        return (self.session_factory)()
+
+    def close_session(self,
+        session: Optional[Union[Session, scoped_session]] = None
+    ) -> None:
+        """
         Args:
-            session: Session    => session to close if not self.session
+            session => session to close if not self.session
         Procedure:
-            Closes either the provided session or the current session
-            at self.session
+            Closes either the provided session or the current
+            session (self.session).
         Preconditions:
-            session is of type Session
-        '''
-        assert session is None or isinstance(session, Session)
+            N/A
+        """
         if session is not None:
             session.close()
         elif self.scoped_sessions and self.session_factory is not None:
@@ -177,144 +174,159 @@ class DBManager(object):
         elif self.session is not None:
             self.session.close()
             self.session = None
-    def bootstrap(self, engine=None):
-        '''
+
+    def bootstrap(self, engine: Optional[Engine] = None) -> None:
+        """
         Args:
-            engine: Engine  => the connection engine to use
+            engine  => the connection engine to use
         Procedure:
-            Use a connection engine to bootstrap a database
-            with the necessary tables, indexes, and (materialized) view
+            Use a database connection (SQLAlchemy Engine) to
+            bootstrap a database with the necessary tables,
+            indexes, and (materialized) views.
         Preconditions:
-            engine is of type Engine
-        '''
-        assert engine is None or isinstance(engine, Engine)
+            N/A
+        """
         if engine is not None:
             self.engine = engine
         if self.engine is not None and self.metadata is not None:
             self.metadata.create_all(self.engine)
-    def initialize(self, conn_string=None, metadata=None, bootstrap=False, scoped=False, create_session=False):
-        '''
+
+    def initialize(self,
+        conn_string: Optional[str] = None,
+        metadata: Optional[MetaData] = None,
+        bootstrap: bool = False,
+        scoped: bool = False,
+        create_session: bool = False
+    ) -> 'DBManager':
+        """
         Args:
-            conn_string: String     => database connection string
-            metadata: MetaData      => database metadata object
-            bootstrap: Boolean      => whether to bootstrap database with table, index, and view information
-            scoped: Boolean         => whether to use scoped session objects (see: http://docs.sqlalchemy.org/en/latest/orm/contextual.html)
-            create_session: Boolean => whether to create a persisted session on initialization
+            conn_string     => database connection string
+            metadata        => database metadata object
+            bootstrap       => whether to bootstrap database with tables, indexes,
+                               and views
+            scoped          => whether to use scoped session objects
+            create_session  => whether to create a persisted database session
         Procedure:
-            initialize a database connection using conn_string and perform various setup tasks if asked to
+            Initialize a database connection using self.conn_string and perform
+            various setup tasks such as boostrapping the database with the
+            necessary tables, indexes and views, and setting up a
+            (scoped) session.
+            NOTE:
+                See http://docs.sqlalchemy.org/en/latest/orm/contextual.html for
+                more information about scoped sessions.
         Preconditions:
-            conn_string is of type String
-            metadata is of type MetaData
-            bootstrap is of type Boolean
-            scoped is of type Boolean
-            create_session is of type Boolean
-        '''
-        assert isinstance(conn_string, (type(None), str))
-        assert (metadata is None and self.metadata is not None) or isinstance(metadata, MetaData)
-        assert isinstance(bootstrap, bool)
-        assert isinstance(scoped, bool)
-        assert isinstance(create_session, bool)
-        try:
-            if conn_string is not None:
-                self.conn_string = conn_string
-            self.create_engine()
-            if metadata is not None:
-                self.metadata = metadata
-            if self.engine is not None:
-                if bootstrap:
-                    self.bootstrap()
-                if scoped or self.scoped_sessions:
-                    self.session_factory = scoped_session(sessionmaker(bind=self.engine, autoflush=False))
-                    self.scoped_sessions = True
-                else:
-                    self.session_factory = sessionmaker(bind=self.engine, autoflush=False)
-                    self.scoped_sessions = False
-                if create_session and not self.scoped_sessions:
-                    self.create_session()
-        except Exception as e:
-            Logger.error('Failed to initialize DBManager (%s)'%str(e))
+            N/A
+        """
+        if conn_string is not None:
+            self.conn_string = conn_string
+        self.create_engine()
+        if metadata is not None:
+            self.metadata = metadata
+        if self.engine is not None:
+            if bootstrap:
+                self.bootstrap()
+            if scoped or self.scoped_sessions:
+                self.session_factory = scoped_session(
+                    sessionmaker(bind=self.engine, autoflush=False)
+                )
+                self.scoped_sessions = True
+            else:
+                self.session_factory = sessionmaker(bind=self.engine, autoflush=False)
+                self.scoped_sessions = False
+            if create_session and not self.scoped_sessions:
+                self.create_session()
         return self
-    def query(self, model, **kwargs):
-        '''
+
+    def query(self, model: Any, **kwargs: Any) -> Optional[Query]:
+        """
         Args:
-            model: BaseTable    => model of table to query
-            **kwargs: Any       => field to filter on
+            model   => model of table to query
+            kwargs  => fields to filter on
         Returns:
-            Query
-            Query object if no error thrown, None otherwise
+            SQLAlchemy Query object with field filters from kwargs applied.
+            If applying the filters fails, will return None instead
+            of raising error.
         Preconditions:
-            model is base class of BaseTable (assumed True)
-        '''
-        try:
-            query = self.session.query(model)
-            for arg in kwargs:
-                query = query.filter(getattr(model, arg) == kwargs[arg])
-            return query
-        except:
-            return None
-    def add(self, record, session=None, commit=False):
-        '''
+            N/A
+        """
+        query = self.session.query(model)
+        for arg in kwargs:
+            query = query.filter(getattr(model, arg) == kwargs[arg])
+        return query
+
+    def add(self,
+        record: Any,
+        session: Optional[Union[session, scoped_session]] = None,
+        commit: bool = False
+    ) -> 'DBManager':
+        """
         Args:
-            record: BaseTable   => record to add to current session
-            session: Session    => session to add record to
-            commit: Boolean     => whether to commit and end the transaction block
+            record      => record to add to current session
+            session     => session to add record to
+            commit      => whether to commit and end the transaction block
         Procedure:
-            DBManager
-            Add record to either provided or current session and potentially commit
+            Add record to either provided or current session and commit if specified
+            (wrapper around Session.add).
         Preconditions:
-            record is instance of BaseTable
-            session is of type Session
-            commit is of type Boolean
-        '''
+            N/A
+        """
         if session is None:
             session = self.session
         session.add(record)
         if commit:
             self.commit(session)
         return self
-    def delete(self, record, session=None, commit=False):
-        '''
+
+    def delete(self,
+        record: Any,
+        session: Optional[Union[session, scoped_session]] = None,
+        commit: bool = False
+    ) -> 'DBManager':
+        """
         Args:
-            record: BaseTable   => record to add to current session
-            session: Session    => session to add record to
-            commit: Boolean     => whether to commit and end the transaction block
+            record      => record to add to current session
+            session     => session to add record to
+            commit      => whether to commit and end the transaction block
         Procedure:
-            DBManager
-            Delete record using either provided session or current session 
-            and potentially commit
+            Delete record using either provided session or current session
+            and commit if specified (wrapper around Session.delete).
         Preconditions:
-            record is instance of BaseTable
-            session is of type Session
-            commit is of type Boolean
-        '''
+            N/A
+        """
         if session is None:
             session = self.session
         session.delete(record)
         if commit:
             self.commit(session)
         return self
-    def commit(self, session=None):
-        '''
+
+    def commit(self,
+        session: Optional[Union[session, scoped_session]] = None
+    ) -> 'DBManager':
+        """
         Args:
-            session: Session    => session to add record to
+            session => session to add record to
         Procedure:
-            Commit either provided or current session
+            Commit either provided or current session (wrapper around Session.commit).
         Preconditions:
-            session is of type Session
-        '''
+            N/A
+        """
         if session is None:
             session = self.session
         session.commit()
         return self
-    def rollback(self, session=None):
-        '''
+
+    def rollback(self,
+        session: Optional[Union[session, scoped_session]] = None
+    ) -> 'DBManager':
+        """
         Args:
-            session: Session    => session to add record to
+            session => session to add record to
         Procedure:
-            Rollback either provided or current session
+            Rollback either provided or current session (wrapper around Session.rollback).
         Preconditions:
-            session is of type Session
-        '''
+            N/A
+        """
         if session is None:
             session = self.session
         session.rollback()
